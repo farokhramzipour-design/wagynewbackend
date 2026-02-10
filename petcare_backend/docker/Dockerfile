@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir --upgrade pip \
         alembic \
         pydantic \
         pydantic-settings \
+        email-validator \
         redis \
         passlib[bcrypt]
 
