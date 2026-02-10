@@ -28,6 +28,16 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def do_run_migrations(connection) -> None:
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+    )
+    with context.begin_transaction():
+        context.run_migrations()
+
+
 async def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = settings.database_url
@@ -38,16 +48,7 @@ async def run_migrations_online() -> None:
     )
 
     async with connectable.connect() as connection:
-        await connection.run_sync(
-            lambda sync_connection: context.configure(
-                connection=sync_connection,
-                target_metadata=target_metadata,
-                compare_type=True,
-            )
-        )
-
-        with context.begin_transaction():
-            context.run_migrations()
+        await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
 
