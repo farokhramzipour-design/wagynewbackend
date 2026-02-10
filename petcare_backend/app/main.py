@@ -23,6 +23,15 @@ from app.api.v1.routers import wallets as wallets_router
 def create_app() -> FastAPI:
     setup_logging()
     app = FastAPI(title="Pet Care Marketplace")
+
+    @app.get("/")
+    async def root():
+        return {"name": "petcare-backend", "status": "ok"}
+
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
     app.include_router(auth_router.router)
     app.include_router(admin_router.router)
     app.include_router(availability_router.router)
