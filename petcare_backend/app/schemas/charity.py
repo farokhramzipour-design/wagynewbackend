@@ -64,6 +64,29 @@ class CharityUpdateOut(BaseModel):
     created_at: datetime
 
 
+class CharityUpdateWithMediaOut(BaseModel):
+    charity_update_id: int
+    charity_case_id: int
+    author_user_id: int | None = None
+    body: str
+    spent_amount_minor: int | None = None
+    currency_code: str | None = None
+    created_at: datetime
+    media_ids: list[int]
+
+
+class CharityDonationOut(BaseModel):
+    donation_id: int
+    charity_case_id: int
+    donor_user_id: int | None = None
+    payment_id: int | None = None
+    status: str
+    currency_code: str
+    amount_minor: int
+    donation_reference: str
+    created_at: datetime
+
+
 class CharityCaseOut(BaseModel):
     charity_case_id: int
     creator_user_id: int

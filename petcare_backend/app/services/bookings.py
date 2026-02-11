@@ -11,7 +11,9 @@ from app.models.bookings import (
     BookingPet,
     BookingPricing,
 )
+from app.core.config import settings
 from app.models.pets import Pet
+from app.models.providers import ProviderService
 from app.services.payments import create_payment_for_booking_confirm
 
 
@@ -65,6 +67,18 @@ async def request_booking(session: AsyncSession, *, payload: dict) -> Booking:
         ).all()
         if len(owned_pets) != len(set(pet_ids)):
             raise HTTPException(status_code=400, detail="pet_owner_mismatch")
+
+        provider_service = await session.scalar(
+            select(ProviderService).where(
+                ProviderService.provider_id == payload["provider_id"],
+                ProviderService.service_type_id == payload["service_type_id"],
+                ProviderService.is_active.is_(True),
+            )
+        )
+        if not provider_service:
+            raise HTTPException(status_code=404, detail="provider_service_not_found")
+        if provider_service.max_pets is not None and len(pets) > provider_service.max_pets:
+            raise HTTPException(status_code=400, detail="max_pets_exceeded")
 
         booking = Booking(
             **payload,
@@ -277,7 +291,7 @@ async def cancel_booking(
     policy_snapshot_json: dict | None,
     refund_minor: int | None,
     payload_json: dict | None,
-) -> Booking:
+) -> tuple[Booking, BookingCancellation]:
     async with session.begin():
         booking = await session.scalar(
             select(Booking).where(Booking.booking_id == booking_id).with_for_update()
@@ -291,16 +305,15 @@ async def cancel_booking(
         booking.status = "cancelled"
         booking.cancelled_at = _utcnow()
 
-        session.add(
-            BookingCancellation(
-                booking_id=booking.booking_id,
-                cancelled_by=cancelled_by,
-                reason=reason,
-                policy_snapshot_json=policy_snapshot_json,
-                refund_minor=refund_minor,
-                created_at=_utcnow(),
-            )
+        cancellation = BookingCancellation(
+            booking_id=booking.booking_id,
+            cancelled_by=cancelled_by,
+            reason=reason,
+            policy_snapshot_json=policy_snapshot_json,
+            refund_minor=refund_minor,
+            created_at=_utcnow(),
         )
+        session.add(cancellation)
 
         _add_event(
             session=session,
@@ -312,7 +325,8 @@ async def cancel_booking(
         )
 
     await session.refresh(booking)
-    return booking
+    await session.refresh(cancellation)
+    return booking, cancellation
 
 
 async def dispute_booking(
@@ -326,6 +340,10 @@ async def dispute_booking(
             raise HTTPException(status_code=404, detail="booking_not_found")
 
         _require_transition(booking.status, {"completed", "cancelled"})
+        if booking.status == "completed" and booking.completed_at is not None:
+            delta = _utcnow() - booking.completed_at
+            if delta.total_seconds() > settings.dispute_window_hours * 3600:
+                raise HTTPException(status_code=400, detail="dispute_window_closed")
         booking.status = "disputed"
 
         _add_event(

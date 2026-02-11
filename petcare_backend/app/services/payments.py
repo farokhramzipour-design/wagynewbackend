@@ -199,6 +199,34 @@ async def create_payout(
     return payment
 
 
+async def create_adjustment(
+    session: AsyncSession,
+    *,
+    booking_id: int | None,
+    payer_user_id: int | None,
+    payee_user_id: int | None,
+    currency_code: str,
+    amount_minor: int,
+    status: str,
+    raw_response_json: dict | None,
+) -> Payment:
+    payment = Payment(
+        booking_id=booking_id,
+        payer_user_id=payer_user_id,
+        payee_user_id=payee_user_id,
+        kind="adjustment",
+        status=status,
+        currency_code=currency_code,
+        amount_minor=amount_minor,
+        gateway_id=None,
+        gateway_transaction_id=None,
+        raw_response_json=raw_response_json,
+    )
+    session.add(payment)
+    await session.flush()
+    return payment
+
+
 async def credit_wallet(
     session: AsyncSession,
     *,
@@ -227,3 +255,41 @@ async def credit_wallet(
     )
     await session.flush()
     return wallet
+
+
+async def list_payments_for_booking(
+    session: AsyncSession, *, booking_id: int
+) -> list[Payment]:
+    return (
+        await session.scalars(
+            select(Payment)
+            .where(Payment.booking_id == booking_id)
+            .order_by(Payment.created_at.desc())
+        )
+    ).all()
+
+
+async def list_wallet_transactions_for_booking(
+    session: AsyncSession, *, booking_id: int
+) -> list[WalletTransaction]:
+    return (
+        await session.scalars(
+            select(WalletTransaction)
+            .join(Payment, Payment.payment_id == WalletTransaction.related_payment_id)
+            .where(Payment.booking_id == booking_id)
+            .order_by(WalletTransaction.created_at.desc())
+        )
+    ).all()
+
+
+async def get_booking_ledger(
+    session: AsyncSession, *, booking_id: int
+) -> dict:
+    pricing = await session.get(BookingPricing, booking_id)
+    payments = await list_payments_for_booking(session, booking_id=booking_id)
+    wallet_txs = await list_wallet_transactions_for_booking(session, booking_id=booking_id)
+    return {
+        "pricing": pricing,
+        "payments": payments,
+        "wallet_transactions": wallet_txs,
+    }

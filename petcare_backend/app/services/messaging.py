@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -43,6 +43,17 @@ async def get_conversation(session: AsyncSession, *, conversation_id: int) -> Co
     if not conversation:
         raise HTTPException(status_code=404, detail="conversation_not_found")
     return conversation
+
+
+async def list_conversations(session: AsyncSession, *, user_id: int) -> list[Conversation]:
+    query = select(Conversation).where(
+        or_(
+            Conversation.participant1_user_id == user_id,
+            Conversation.participant2_user_id == user_id,
+        )
+    )
+    query = query.order_by(Conversation.last_message_at.desc().nullslast())
+    return (await session.scalars(query)).all()
 
 
 async def send_message(
@@ -156,3 +167,28 @@ async def attach_media(
     await session.commit()
     await session.refresh(attachment)
     return attachment
+
+
+async def list_flagged_messages(session: AsyncSession, *, limit: int = 200) -> list[Message]:
+    return (
+        await session.scalars(
+            select(Message)
+            .where(Message.is_flagged.is_(True))
+            .order_by(Message.created_at.desc())
+            .limit(limit)
+        )
+    ).all()
+
+
+async def resolve_flagged_message(
+    session: AsyncSession, *, message_id: int, is_flagged: bool, flag_reason: str | None
+) -> Message:
+    message = await session.get(Message, message_id)
+    if not message:
+        raise HTTPException(status_code=404, detail="message_not_found")
+
+    message.is_flagged = is_flagged
+    message.flag_reason = flag_reason if is_flagged else None
+    await session.commit()
+    await session.refresh(message)
+    return message

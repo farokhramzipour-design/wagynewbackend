@@ -77,3 +77,33 @@ class ProviderServiceStepProgressOut(BaseModel):
     review_note: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
+
+
+class ProviderServiceMissingOut(BaseModel):
+    provider_service_id: int
+    service_type_id: int
+    status: str
+    missing_steps: list[str]
+
+
+class ProviderOnboardingSummaryOut(BaseModel):
+    provider_id: int
+    provider_status: str
+    verifications: list[dict]
+    services: list[ProviderServiceMissingOut]
+
+
+class ProviderServiceReviewStepOut(BaseModel):
+    step_id: int
+    code: str
+    status: str
+    data_json: dict | None = None
+    review_note: str | None = None
+    completed_at: datetime | None = None
+
+
+class ProviderServiceReviewOut(BaseModel):
+    provider_service_id: int
+    status: str
+    review_note: str | None = None
+    steps: list[ProviderServiceReviewStepOut]

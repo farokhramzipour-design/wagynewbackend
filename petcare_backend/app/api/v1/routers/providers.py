@@ -9,6 +9,7 @@ from app.schemas.providers import (
     ProviderProfileUpdate,
     ProviderRateEstimateOut,
     ProviderRateEstimateRequest,
+    ProviderProfileViewerOut,
     ProviderServiceRateCreate,
     ProviderServiceUpsert,
     ProviderStatusUpdate,
@@ -20,6 +21,7 @@ from app.services.providers import (
     create_provider_service_rate,
     create_provider_verification,
     estimate_provider_rate,
+    get_provider_profile,
     submit_provider_review,
     update_provider_profile,
     upsert_provider_home,
@@ -119,3 +121,44 @@ async def admin_decision(
         reason=payload.reason,
     )
     return ProviderOut.model_validate(provider, from_attributes=True)
+
+
+@router.get("/{provider_id}/profile", response_model=ProviderProfileViewerOut)
+async def get_provider_profile_endpoint(
+    provider_id: int, db: AsyncSession = Depends(get_db)
+) -> ProviderProfileViewerOut:
+    data = await get_provider_profile(db, provider_id=provider_id)
+    provider_out = ProviderOut.model_validate(data["provider"], from_attributes=True)
+    user_profile = (
+        None
+        if data["user_profile"] is None
+        else {
+            "user_id": data["user_profile"].user_id,
+            "first_name": data["user_profile"].first_name,
+            "last_name": data["user_profile"].last_name,
+            "date_of_birth": data["user_profile"].date_of_birth,
+            "avatar_media_id": data["user_profile"].avatar_media_id,
+            "bio": data["user_profile"].bio,
+        }
+    )
+    home = (
+        None
+        if data["home"] is None
+        else {
+            "provider_id": data["home"].provider_id,
+            "home_type": data["home"].home_type,
+            "has_fenced_yard": data["home"].has_fenced_yard,
+            "smoking_household": data["home"].smoking_household,
+            "has_children": data["home"].has_children,
+            "has_pets": data["home"].has_pets,
+            "work_from_home": data["home"].work_from_home,
+        }
+    )
+    return ProviderProfileViewerOut(
+        provider=provider_out,
+        user_profile=user_profile,
+        home=home,
+        services=data["services"],
+        provider_verified=data.get("provider_verified"),
+        identity_verified=data.get("identity_verified"),
+    )

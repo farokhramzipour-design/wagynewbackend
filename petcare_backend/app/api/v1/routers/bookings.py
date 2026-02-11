@@ -5,6 +5,7 @@ from app.api.deps import get_db
 from app.schemas.bookings import (
     BookingAction,
     BookingCancelRequest,
+    BookingCancelOut,
     BookingConfirmRequest,
     BookingRequestCreate,
     BookingEventOut,
@@ -114,11 +115,11 @@ async def complete_booking_endpoint(
     return {"booking_id": booking.booking_id, "status": booking.status}
 
 
-@router.post("/{booking_id}/cancel")
+@router.post("/{booking_id}/cancel", response_model=BookingCancelOut)
 async def cancel_booking_endpoint(
     booking_id: int, payload: BookingCancelRequest, db: AsyncSession = Depends(get_db)
 ):
-    booking = await cancel_booking(
+    booking, cancellation = await cancel_booking(
         db,
         booking_id=booking_id,
         actor_type=payload.actor_type,
@@ -129,7 +130,13 @@ async def cancel_booking_endpoint(
         refund_minor=payload.refund_minor,
         payload_json=payload.payload_json,
     )
-    return {"booking_id": booking.booking_id, "status": booking.status}
+    return BookingCancelOut(
+        booking_id=booking.booking_id,
+        status=booking.status,
+        cancellation_id=cancellation.cancellation_id,
+        refund_minor=cancellation.refund_minor,
+        policy_snapshot_json=cancellation.policy_snapshot_json,
+    )
 
 
 @router.post("/{booking_id}/dispute")

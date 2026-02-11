@@ -409,3 +409,47 @@ async def _validate_time_off_conflicts(
     conflict = await session.scalar(select(ProviderTimeOff).where(and_(*conditions)))
     if conflict:
         raise HTTPException(status_code=409, detail="time_off_conflict")
+
+
+async def get_provider_calendar(
+    session: AsyncSession,
+    *,
+    provider_id: int,
+    start_date: date,
+    end_date: date,
+) -> dict:
+    start_dt = datetime.combine(start_date, datetime.min.time())
+    end_dt = datetime.combine(end_date, datetime.max.time())
+
+    bookings = (
+        await session.scalars(
+            select(Booking).where(
+                Booking.provider_id == provider_id,
+                Booking.status.not_in(["declined", "cancelled"]),
+                Booking.start_datetime <= end_dt,
+                Booking.end_datetime >= start_dt,
+            )
+        )
+    ).all()
+
+    time_off = (
+        await session.scalars(
+            select(ProviderTimeOff).where(
+                ProviderTimeOff.provider_id == provider_id,
+                ProviderTimeOff.start_datetime <= end_dt,
+                ProviderTimeOff.end_datetime >= start_dt,
+            )
+        )
+    ).all()
+
+    overrides = (
+        await session.scalars(
+            select(ProviderAvailabilityOverride).where(
+                ProviderAvailabilityOverride.provider_id == provider_id,
+                ProviderAvailabilityOverride.date >= start_date,
+                ProviderAvailabilityOverride.date <= end_date,
+            )
+        )
+    ).all()
+
+    return {"bookings": bookings, "time_off": time_off, "overrides": overrides}

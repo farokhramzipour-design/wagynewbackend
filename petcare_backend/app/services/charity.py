@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.charity import CharityCase, CharityDonation, CharityUpdate, CharityUpdateMedia
+from app.models.payments import Payment
 from app.models.users import UserVerification
 
 
@@ -221,6 +222,56 @@ async def list_updates(session: AsyncSession, *, case_id: int) -> list[CharityUp
     return (
         await session.scalars(
             select(CharityUpdate).where(CharityUpdate.charity_case_id == case_id)
+        )
+    ).all()
+
+
+async def list_updates_with_media(
+    session: AsyncSession, *, case_id: int
+) -> list[dict]:
+    updates = await list_updates(session, case_id=case_id)
+    result = []
+    for update in updates:
+        media_ids = (
+            await session.scalars(
+                select(CharityUpdateMedia.media_id).where(
+                    CharityUpdateMedia.charity_update_id == update.charity_update_id
+                )
+            )
+        ).all()
+        result.append(
+            {
+                "charity_update_id": update.charity_update_id,
+                "charity_case_id": update.charity_case_id,
+                "author_user_id": update.author_user_id,
+                "body": update.body,
+                "spent_amount_minor": update.spent_amount_minor,
+                "currency_code": update.currency_code,
+                "created_at": update.created_at,
+                "media_ids": media_ids,
+            }
+        )
+    return result
+
+
+async def list_case_donations(
+    session: AsyncSession, *, case_id: int
+) -> list[CharityDonation]:
+    return (
+        await session.scalars(
+            select(CharityDonation).where(CharityDonation.charity_case_id == case_id)
+        )
+    ).all()
+
+
+async def list_case_payments(
+    session: AsyncSession, *, case_id: int
+) -> list[Payment]:
+    return (
+        await session.scalars(
+            select(Payment)
+            .join(CharityDonation, CharityDonation.payment_id == Payment.payment_id)
+            .where(CharityDonation.charity_case_id == case_id)
         )
     ).all()
 

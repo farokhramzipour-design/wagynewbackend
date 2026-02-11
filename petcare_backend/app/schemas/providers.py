@@ -85,3 +85,26 @@ class ProviderOut(BaseModel):
     repeat_clients_count: int | None = None
     average_rating: float | None = None
     featured: bool | None = None
+
+
+class ProviderServiceCardOut(BaseModel):
+    provider_service_id: int
+    service_type_id: int
+    service_code: str
+    status: str
+    is_active: bool
+    max_pets: int | None = None
+    currency_code: str | None = None
+    unit: str | None = None
+    base_amount_minor: int | None = None
+    duration_minutes: int | None = None
+    policies_json: dict | None = None
+
+
+class ProviderProfileViewerOut(BaseModel):
+    provider: ProviderOut
+    user_profile: dict | None = None
+    home: dict | None = None
+    services: list[ProviderServiceCardOut]
+    provider_verified: bool | None = None
+    identity_verified: bool | None = None

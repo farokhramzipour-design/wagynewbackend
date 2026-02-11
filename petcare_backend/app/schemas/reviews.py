@@ -7,6 +7,7 @@ class ReviewCreate(BaseModel):
     reviewee_user_id: int
     rating: int
     review_text: str | None = None
+    is_public: bool | None = None
 
 
 class ReviewModerate(BaseModel):
@@ -26,7 +27,12 @@ class ReviewOut(BaseModel):
     review_text: str | None = None
     moderation_status: str
     response_text: str | None = None
+    is_public: bool
     helpful_count: int
+
+
+class ReviewVisibilityUpdate(BaseModel):
+    is_public: bool
 
 
 class ReviewMediaCreate(BaseModel):

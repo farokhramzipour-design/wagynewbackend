@@ -151,6 +151,21 @@ async def search_providers(session: AsyncSession, *, payload: dict):
 
     results = []
     for provider in providers:
+        provider_service_id = None
+        provider_service = None
+        if payload.get("service_type_id"):
+            provider_service = await session.scalar(
+                select(ProviderService).where(
+                    ProviderService.provider_id == provider.provider_id,
+                    ProviderService.service_type_id == payload["service_type_id"],
+                    ProviderService.is_active.is_(True),
+                    ProviderService.status == "approved",
+                )
+            )
+            provider_service_id = (
+                provider_service.provider_service_id if provider_service else None
+            )
+
         distance_km = None
         if payload.get("lat") is not None and payload.get("lng") is not None:
             address = await session.scalar(
@@ -162,7 +177,10 @@ async def search_providers(session: AsyncSession, *, payload: dict):
                 distance_km = _haversine_km(
                     payload["lat"], payload["lng"], address.lat, address.lng
                 )
-                if provider.service_radius_km is not None and distance_km > provider.service_radius_km:
+                radius_km = provider.service_radius_km
+                if provider_service and provider_service.service_area_radius_km:
+                    radius_km = provider_service.service_area_radius_km
+                if radius_km is not None and distance_km > radius_km:
                     continue
 
         if payload.get("start_date") and payload.get("end_date") and payload.get(
@@ -192,16 +210,37 @@ async def search_providers(session: AsyncSession, *, payload: dict):
             provider.is_star_sitter,
         )
 
+        provider_verified = await session.scalar(
+            select(ProviderVerification.provider_verification_id)
+            .where(
+                ProviderVerification.provider_id == provider.provider_id,
+                ProviderVerification.status == "passed",
+            )
+            .limit(1)
+        )
+        identity_verified = await session.scalar(
+            select(UserVerification.verification_id)
+            .where(
+                UserVerification.user_id == provider.user_id,
+                UserVerification.type == "identity",
+                UserVerification.status == "passed",
+            )
+            .limit(1)
+        )
+
         results.append(
             {
                 "provider_id": provider.provider_id,
                 "user_id": provider.user_id,
+                "provider_service_id": provider_service_id,
                 "distance_km": distance_km,
                 "average_rating": float(provider.average_rating) if provider.average_rating is not None else None,
                 "response_rate_percent": provider.response_rate_percent,
                 "total_completed_bookings": provider.total_completed_bookings,
                 "featured": provider.featured,
                 "is_star_sitter": provider.is_star_sitter,
+                "provider_verified": provider_verified is not None,
+                "identity_verified": identity_verified is not None,
                 "score": score,
             }
         )

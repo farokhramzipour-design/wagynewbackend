@@ -3,7 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_admin
 from app.schemas.onboarding import (
+    ProviderOnboardingSummaryOut,
     ProviderServiceEnable,
+    ProviderServiceReviewOut,
     ProviderServiceStatusUpdate,
     ProviderServiceStepComplete,
     ProviderServiceStepProgressOut,
@@ -21,7 +23,9 @@ from app.services.onboarding import (
     create_flow,
     create_step,
     enable_service,
+    get_provider_onboarding_summary,
     get_active_flow,
+    get_service_review_view,
     list_step_progress,
     list_steps,
     save_step_data,
@@ -147,3 +151,21 @@ async def admin_reject_step_endpoint(
         db, provider_service_id=provider_service_id, step_id=step_id, review_note=payload.review_note
     )
     return ProviderServiceStepProgressOut.model_validate(progress, from_attributes=True)
+
+
+@router.get("/providers/{provider_id}/summary", response_model=ProviderOnboardingSummaryOut)
+async def provider_onboarding_summary_endpoint(
+    provider_id: int, db: AsyncSession = Depends(get_db)
+) -> ProviderOnboardingSummaryOut:
+    data = await get_provider_onboarding_summary(db, provider_id=provider_id)
+    return ProviderOnboardingSummaryOut(**data)
+
+
+@router.get("/services/{provider_service_id}/admin/review", response_model=ProviderServiceReviewOut)
+async def provider_service_review_endpoint(
+    provider_service_id: int,
+    admin_user_id: str | None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> ProviderServiceReviewOut:
+    data = await get_service_review_view(db, provider_service_id=provider_service_id)
+    return ProviderServiceReviewOut(**data)

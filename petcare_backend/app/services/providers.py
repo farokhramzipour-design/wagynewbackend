@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.onboarding import ProviderServiceStepProgress, ServiceOnboardingStep
 from app.models.providers import (
     Provider,
     ProviderHome,
@@ -13,6 +14,7 @@ from app.models.providers import (
     ProviderVerification,
 )
 from app.models.services import ServiceType
+from app.models.users import UserProfile, UserVerification
 from app.services.onboarding import get_active_flow
 
 logger = logging.getLogger(__name__)
@@ -208,3 +210,92 @@ async def admin_decide_provider(
         },
     )
     return provider
+
+
+async def get_provider_profile(session: AsyncSession, *, provider_id: int) -> dict:
+    provider = await session.get(Provider, provider_id)
+    if not provider or provider.status != "approved":
+        raise HTTPException(status_code=404, detail="provider_not_found")
+
+    user_profile = await session.scalar(
+        select(UserProfile).where(UserProfile.user_id == provider.user_id)
+    )
+    home = await session.get(ProviderHome, provider_id)
+
+    service_rows = (
+        await session.execute(
+            select(ProviderService, ServiceType)
+            .join(ServiceType, ServiceType.service_type_id == ProviderService.service_type_id)
+            .where(
+                ProviderService.provider_id == provider_id,
+                ProviderService.is_active.is_(True),
+                ProviderService.status == "approved",
+                ServiceType.is_active.is_(True),
+            )
+        )
+    ).all()
+
+    provider_verified = await session.scalar(
+        select(ProviderVerification.provider_verification_id)
+        .where(
+            ProviderVerification.provider_id == provider_id,
+            ProviderVerification.status == "passed",
+        )
+        .limit(1)
+    )
+    identity_verified = await session.scalar(
+        select(UserVerification.verification_id)
+        .where(
+            UserVerification.user_id == provider.user_id,
+            UserVerification.type == "identity",
+            UserVerification.status == "passed",
+        )
+        .limit(1)
+    )
+
+    services = []
+    for provider_service, service_type in service_rows:
+        rate = await session.scalar(
+            select(ProviderServiceRate)
+            .where(ProviderServiceRate.provider_service_id == provider_service.provider_service_id)
+            .order_by(ProviderServiceRate.created_at.desc())
+        )
+
+        policies = await session.scalar(
+            select(ProviderServiceStepProgress.data_json)
+            .join(
+                ServiceOnboardingStep,
+                ServiceOnboardingStep.step_id == ProviderServiceStepProgress.step_id,
+            )
+            .where(
+                ProviderServiceStepProgress.provider_service_id
+                == provider_service.provider_service_id,
+                ProviderServiceStepProgress.status == "completed",
+                ServiceOnboardingStep.code == "policies",
+            )
+        )
+
+        services.append(
+            {
+                "provider_service_id": provider_service.provider_service_id,
+                "service_type_id": provider_service.service_type_id,
+                "service_code": service_type.code,
+                "status": provider_service.status,
+                "is_active": provider_service.is_active,
+                "max_pets": provider_service.max_pets,
+                "currency_code": rate.currency_code if rate else None,
+                "unit": rate.unit if rate else None,
+                "base_amount_minor": rate.base_amount_minor if rate else None,
+                "duration_minutes": rate.duration_minutes if rate else None,
+                "policies_json": policies,
+            }
+        )
+
+    return {
+        "provider": provider,
+        "user_profile": user_profile,
+        "home": home,
+        "services": services,
+        "provider_verified": provider_verified is not None,
+        "identity_verified": identity_verified is not None,
+    }

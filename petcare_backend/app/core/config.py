@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     login_lockout_seconds: int = 900
     otp_request_cooldown_seconds: int = 60
     message_rate_limit_per_minute: int = 30
+    dispute_window_hours: int = 72
 
 
 settings = Settings()

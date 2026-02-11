@@ -58,3 +58,11 @@ class BookingEventOut(BaseModel):
     actor_user_id: int | None = None
     payload_json: dict | None = None
     created_at: datetime
+
+
+class BookingCancelOut(BaseModel):
+    booking_id: int
+    status: str
+    cancellation_id: int
+    refund_minor: int | None = None
+    policy_snapshot_json: dict | None = None

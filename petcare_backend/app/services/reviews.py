@@ -43,6 +43,7 @@ async def create_review(session: AsyncSession, *, payload: dict) -> Review:
         review_text=payload.get("review_text"),
         moderation_status="pending",
         response_text=None,
+        is_public=payload.get("is_public", True),
         helpful_count=0,
     )
     session.add(review)
@@ -72,6 +73,18 @@ async def respond_to_review(session: AsyncSession, *, review_id: int, response_t
     return review
 
 
+async def update_review_visibility(
+    session: AsyncSession, *, review_id: int, is_public: bool
+) -> Review:
+    review = await session.get(Review, review_id)
+    if not review:
+        raise HTTPException(status_code=404, detail="review_not_found")
+
+    review.is_public = is_public
+    await session.flush()
+    return review
+
+
 async def add_review_media(session: AsyncSession, *, review_id: int, media_id: int) -> ReviewMedia:
     review = await session.get(Review, review_id)
     if not review:
@@ -96,6 +109,19 @@ async def get_review(session: AsyncSession, *, review_id: int) -> Review:
     if not review:
         raise HTTPException(status_code=404, detail="review_not_found")
     return review
+
+
+async def list_reviews(
+    session: AsyncSession, *, provider_id: int, service_type_id: int | None
+) -> list[Review]:
+    query = (
+        select(Review)
+        .join(Booking, Booking.booking_id == Review.booking_id)
+        .where(Booking.provider_id == provider_id)
+    )
+    if service_type_id is not None:
+        query = query.where(Booking.service_type_id == service_type_id)
+    return (await session.scalars(query.order_by(Review.created_at.desc()))).all()
 
 
 async def _update_provider_metrics(session: AsyncSession, provider_id: int) -> None:

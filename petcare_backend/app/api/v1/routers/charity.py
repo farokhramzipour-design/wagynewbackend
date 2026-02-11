@@ -11,6 +11,7 @@ from app.schemas.charity import (
     CharityUpdateCreate,
     CharityUpdateMediaCreate,
     CharityUpdateOut,
+    CharityUpdateWithMediaOut,
 )
 from app.services.charity import (
     activate_case,
@@ -23,6 +24,7 @@ from app.services.charity import (
     get_case,
     list_cases,
     list_updates,
+    list_updates_with_media,
     submit_case,
     update_case,
 )
@@ -106,6 +108,12 @@ async def create_update_endpoint(payload: CharityUpdateCreate, db: AsyncSession 
 async def list_updates_endpoint(case_id: int, db: AsyncSession = Depends(get_db)):
     records = await list_updates(db, case_id=case_id)
     return [CharityUpdateOut.model_validate(r, from_attributes=True) for r in records]
+
+
+@router.get("/cases/{case_id}/proof", response_model=list[CharityUpdateWithMediaOut])
+async def list_proof_endpoint(case_id: int, db: AsyncSession = Depends(get_db)):
+    records = await list_updates_with_media(db, case_id=case_id)
+    return [CharityUpdateWithMediaOut(**r) for r in records]
 
 
 @router.post("/updates/media")

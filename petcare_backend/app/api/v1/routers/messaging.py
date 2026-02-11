@@ -18,6 +18,7 @@ from app.services.messaging import (
     create_conversation,
     flag_message,
     get_conversation,
+    list_conversations,
     list_messages,
     mark_message_read,
     send_message,
@@ -45,6 +46,14 @@ async def get_conversation_endpoint(
 ) -> ConversationOut:
     convo = await get_conversation(db, conversation_id=conversation_id)
     return ConversationOut.model_validate(convo, from_attributes=True)
+
+
+@router.get("/conversations", response_model=list[ConversationOut])
+async def list_conversations_endpoint(
+    user_id: int, db: AsyncSession = Depends(get_db)
+) -> list[ConversationOut]:
+    conversations = await list_conversations(db, user_id=user_id)
+    return [ConversationOut.model_validate(c, from_attributes=True) for c in conversations]
 
 
 @router.post("/send", response_model=MessageOut)

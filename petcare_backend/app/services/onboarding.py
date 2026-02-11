@@ -9,7 +9,7 @@ from app.models.onboarding import (
     ServiceOnboardingFlow,
     ServiceOnboardingStep,
 )
-from app.models.providers import Provider, ProviderService
+from app.models.providers import Provider, ProviderService, ProviderVerification
 
 
 def _utcnow() -> datetime:
@@ -143,6 +143,9 @@ async def save_step_data(
     progress.data_json = data_json
     if progress.status == "not_started":
         progress.status = "in_progress"
+
+    await _apply_step_side_effects(session, provider_service_id=provider_service_id, step_id=step_id, data_json=data_json)
+
     await session.commit()
     await session.refresh(progress)
     return progress
@@ -170,6 +173,9 @@ async def complete_step(
     _validate_step_completion(step, progress.data_json)
     progress.status = "completed"
     progress.completed_at = _utcnow()
+
+    await _apply_step_side_effects(session, provider_service_id=provider_service_id, step_id=step_id, data_json=progress.data_json)
+
     await session.commit()
     await session.refresh(progress)
     return progress
@@ -238,3 +244,102 @@ async def admin_reject_step(
     await session.commit()
     await session.refresh(progress)
     return progress
+
+
+async def _apply_step_side_effects(
+    session: AsyncSession, *, provider_service_id: int, step_id: int, data_json: dict | None
+) -> None:
+    if not data_json:
+        return
+    step = await session.get(ServiceOnboardingStep, step_id)
+    if not step:
+        return
+    provider_service = await session.get(ProviderService, provider_service_id)
+    if not provider_service:
+        return
+
+    if step.code == "service_area" and isinstance(data_json.get("radius_km"), int):
+        provider_service.service_area_radius_km = data_json.get("radius_km")
+
+
+async def get_provider_onboarding_summary(
+    session: AsyncSession, *, provider_id: int
+) -> dict:
+    provider = await session.get(Provider, provider_id)
+    if not provider:
+        raise HTTPException(status_code=404, detail="provider_not_found")
+
+    verifications = (
+        await session.scalars(
+            select(ProviderVerification).where(ProviderVerification.provider_id == provider_id)
+        )
+    ).all()
+
+    services = (
+        await session.scalars(
+            select(ProviderService).where(ProviderService.provider_id == provider_id)
+        )
+    ).all()
+
+    service_summaries = []
+    for service in services:
+        progress = await list_step_progress(
+            session, provider_service_id=service.provider_service_id
+        )
+        missing_steps = [
+            (await session.get(ServiceOnboardingStep, p.step_id)).code
+            for p in progress
+            if p.status != "completed"
+        ]
+        service_summaries.append(
+            {
+                "provider_service_id": service.provider_service_id,
+                "service_type_id": service.service_type_id,
+                "status": service.status,
+                "missing_steps": missing_steps,
+            }
+        )
+
+    return {
+        "provider_id": provider.provider_id,
+        "provider_status": provider.status,
+        "verifications": [
+            {"type": v.type, "status": v.status, "verified_at": v.verified_at}
+            for v in verifications
+        ],
+        "services": service_summaries,
+    }
+
+
+async def get_service_review_view(
+    session: AsyncSession, *, provider_service_id: int
+) -> dict:
+    provider_service = await session.get(ProviderService, provider_service_id)
+    if not provider_service:
+        raise HTTPException(status_code=404, detail="provider_service_not_found")
+
+    rows = await session.execute(
+        select(ProviderServiceStepProgress, ServiceOnboardingStep)
+        .join(ServiceOnboardingStep, ServiceOnboardingStep.step_id == ProviderServiceStepProgress.step_id)
+        .where(ProviderServiceStepProgress.provider_service_id == provider_service_id)
+        .order_by(ServiceOnboardingStep.sort_order.asc())
+    )
+    steps = []
+    for p, step in rows:
+        steps.append(
+            {
+                "step_id": p.step_id,
+                "code": step.code,
+                "status": p.status,
+                "data_json": p.data_json,
+                "review_note": p.review_note,
+                "completed_at": p.completed_at,
+            }
+        )
+
+    return {
+        "provider_service_id": provider_service.provider_service_id,
+        "status": provider_service.status,
+        "review_note": provider_service.review_note,
+        "steps": steps,
+    }

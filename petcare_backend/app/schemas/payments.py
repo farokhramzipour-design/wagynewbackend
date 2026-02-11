@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -46,3 +48,34 @@ class WalletAdjust(BaseModel):
     amount_minor: int
     reason: str | None = None
     related_payment_id: int | None = None
+
+
+class PaymentAdjustmentCreate(BaseModel):
+    booking_id: int | None = None
+    payer_user_id: int | None = None
+    payee_user_id: int | None = None
+    currency_code: str = Field(..., min_length=3, max_length=3)
+    amount_minor: int
+    status: str = "captured"
+    raw_response_json: dict | None = None
+
+
+class PaymentOut(BaseModel):
+    payment_id: int
+    booking_id: int | None = None
+    payer_user_id: int | None = None
+    payee_user_id: int | None = None
+    kind: str
+    status: str
+    currency_code: str
+    amount_minor: int
+    gateway_id: int | None = None
+    gateway_transaction_id: str | None = None
+    created_at: datetime | None = None
+
+
+class BookingLedgerOut(BaseModel):
+    booking_id: int
+    pricing: dict | None = None
+    payments: list[PaymentOut]
+    wallet_transactions: list[dict]

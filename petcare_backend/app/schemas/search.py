@@ -27,12 +27,15 @@ class SearchProvidersRequest(BaseModel):
 class ProviderSearchResult(BaseModel):
     provider_id: int
     user_id: int
+    provider_service_id: int | None = None
     distance_km: float | None = None
     average_rating: float | None = None
     response_rate_percent: int | None = None
     total_completed_bookings: int | None = None
     featured: bool | None = None
     is_star_sitter: bool | None = None
+    provider_verified: bool | None = None
+    identity_verified: bool | None = None
     score: float
 
 

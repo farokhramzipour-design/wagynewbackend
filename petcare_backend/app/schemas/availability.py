@@ -59,3 +59,33 @@ class AvailabilityCheckRequest(BaseModel):
     start_datetime: datetime
     end_datetime: datetime
     requested_units: int
+
+
+class ProviderCalendarBookingOut(BaseModel):
+    booking_id: int
+    service_type_id: int
+    status: str
+    start_datetime: datetime
+    end_datetime: datetime
+
+
+class ProviderCalendarTimeOffOut(BaseModel):
+    time_off_id: int
+    start_datetime: datetime
+    end_datetime: datetime
+    reason: Optional[str] = None
+
+
+class ProviderCalendarOverrideOut(BaseModel):
+    override_id: int
+    date: date
+    service_type_id: Optional[int] = None
+    is_available: bool
+    capacity: Optional[int] = None
+    note: Optional[str] = None
+
+
+class ProviderCalendarOut(BaseModel):
+    bookings: list[ProviderCalendarBookingOut]
+    time_off: list[ProviderCalendarTimeOffOut]
+    overrides: list[ProviderCalendarOverrideOut]

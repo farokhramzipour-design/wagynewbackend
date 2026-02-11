@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +10,7 @@ from app.schemas.availability import (
     AvailabilityOverrideUpdate,
     AvailabilityRuleCreate,
     AvailabilityRuleUpdate,
+    ProviderCalendarOut,
     TimeOffCreate,
     TimeOffUpdate,
 )
@@ -21,6 +24,7 @@ from app.services.availability import (
     get_override,
     get_rule,
     get_time_off,
+    get_provider_calendar,
     is_provider_available,
     list_overrides,
     list_rules,
@@ -149,3 +153,47 @@ async def availability_check(
         requested_units=payload.requested_units,
     )
     return {"available": available}
+
+
+@router.get("/calendar", response_model=ProviderCalendarOut)
+async def provider_calendar_endpoint(
+    provider_id: int,
+    start_date: date,
+    end_date: date,
+    db: AsyncSession = Depends(get_db),
+) -> ProviderCalendarOut:
+    data = await get_provider_calendar(
+        db, provider_id=provider_id, start_date=start_date, end_date=end_date
+    )
+    return ProviderCalendarOut(
+        bookings=[
+            {
+                "booking_id": b.booking_id,
+                "service_type_id": b.service_type_id,
+                "status": b.status,
+                "start_datetime": b.start_datetime,
+                "end_datetime": b.end_datetime,
+            }
+            for b in data["bookings"]
+        ],
+        time_off=[
+            {
+                "time_off_id": t.time_off_id,
+                "start_datetime": t.start_datetime,
+                "end_datetime": t.end_datetime,
+                "reason": t.reason,
+            }
+            for t in data["time_off"]
+        ],
+        overrides=[
+            {
+                "override_id": o.override_id,
+                "date": o.date,
+                "service_type_id": o.service_type_id,
+                "is_available": o.is_available,
+                "capacity": o.capacity,
+                "note": o.note,
+            }
+            for o in data["overrides"]
+        ],
+    )
