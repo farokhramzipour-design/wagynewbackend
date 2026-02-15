@@ -1,6 +1,8 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.logging import setup_logging
+from app.core.config import settings
 from app.api.v1.routers import auth as auth_router
 from app.api.v1.routers import admin as admin_router
 from app.api.v1.routers import availability as availability_router
@@ -23,6 +25,14 @@ from app.api.v1.routers import wallets as wallets_router
 def create_app() -> FastAPI:
     setup_logging()
     app = FastAPI(title="Pet Care Marketplace")
+    allow_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/")
     async def root():

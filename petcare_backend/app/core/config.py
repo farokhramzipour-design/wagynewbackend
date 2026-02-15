@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     otp_request_cooldown_seconds: int = 60
     message_rate_limit_per_minute: int = 30
     dispute_window_hours: int = 72
+    cors_allow_origins: str = "http://localhost:3000,http://localhost:5173"
 
 
 settings = Settings()
